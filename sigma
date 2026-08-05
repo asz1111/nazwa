@@ -1,0 +1,283 @@
+-- slpn skrypt
+local Players = game:GetService('Players')
+local UserInputService = game:GetService('UserInputService')
+local RunService = game:GetService('RunService')
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
+
+local DEFAULT_SIZE = Vector3.new(4, 5.7, 2.4)
+local HitboxMult = { X = 1, Y = 1, Z = 1 }
+local _originalNew = nil
+local hookInstalled = false
+
+local function tryHook()
+    if hookInstalled then return end
+    local ok, mod = pcall(function()
+        return require(ReplicatedStorage:WaitForChild('SharedModules',5):WaitForChild('Hitbox',5))
+    end)
+    if not ok or not mod then return end
+    _originalNew = mod.new
+    hookInstalled = true
+    mod.new = function(id, preset, params)
+        local hitbox = _originalNew(id, preset, params)
+        if id == 'GKHitbox' then
+            local base = hitbox.Size or DEFAULT_SIZE
+            hitbox.Size = Vector3.new(
+                math.clamp(base.X*HitboxMult.X, base.X, base.X*10),
+                math.clamp(base.Y*HitboxMult.Y, base.Y, base.Y*10),
+                math.clamp(base.Z*HitboxMult.Z, base.Z, base.Z*10)
+            )
+        end
+        return hitbox
+    end
+end
+getgenv().DiveHitboxMult = HitboxMult
+task.spawn(tryHook)
+
+for _, sg in ipairs(game:GetService('CoreGui'):GetChildren()) do
+    if sg.Name:match('^dhb_') or sg.Name:match('^aPanel_') then sg:Destroy() end
+end
+
+local WIN_W=260; local HEADER_H=32; local PADDING=12
+local SLIDER_H=48; local BTN_H=26; local GAP=10
+local CONTENT_H = SLIDER_H*3 + BTN_H + 1 + BTN_H + GAP*5
+local WIN_H = HEADER_H + PADDING + CONTENT_H + PADDING
+
+local gui = Instance.new('ScreenGui')
+gui.Name = 'dhb_'..math.random(1e5,9e5)
+gui.ResetOnSpawn = false; gui.DisplayOrder = 999
+gui.IgnoreGuiInset = true; gui.Parent = game:GetService('CoreGui')
+
+local win = Instance.new('Frame')
+win.Size = UDim2.new(0,WIN_W,0,WIN_H)
+win.Position = UDim2.new(0,20,0,160)
+win.BackgroundColor3 = Color3.fromRGB(10,10,10)
+win.BorderSizePixel = 0; win.Active = true; win.Draggable = true; win.Parent = gui
+Instance.new('UICorner',win).CornerRadius = UDim.new(0,6)
+Instance.new('UIStroke',win).Color = Color3.fromRGB(40,40,40)
+
+local bar = Instance.new('Frame')
+bar.Size = UDim2.new(1,0,0,HEADER_H); bar.BackgroundColor3 = Color3.fromRGB(15,15,15)
+bar.BorderSizePixel = 0; bar.Parent = win
+Instance.new('UICorner',bar).CornerRadius = UDim.new(0,6)
+local barfix = Instance.new('Frame')
+barfix.Size = UDim2.new(1,0,0.5,0); barfix.Position = UDim2.new(0,0,0.5,0)
+barfix.BackgroundColor3 = Color3.fromRGB(15,15,15); barfix.BorderSizePixel = 0; barfix.Parent = bar
+
+local title = Instance.new('TextLabel')
+title.Text = 'slpn skrypt'; title.Size = UDim2.new(1,-12,1,0)
+title.Position = UDim2.new(0,10,0,0); title.BackgroundTransparency = 1
+title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.Code
+title.TextSize = 16; title.TextXAlignment = Enum.TextXAlignment.Left; title.Parent = bar
+
+local bubble = Instance.new('Frame')
+bubble.Size = UDim2.new(0,10,0,10); bubble.Position = UDim2.new(1,-24,0.5,-5)
+bubble.BackgroundColor3 = Color3.fromRGB(60,200,80); bubble.BorderSizePixel = 0
+bubble.ZIndex = 4; bubble.Parent = bar
+Instance.new('UICorner',bubble).CornerRadius = UDim.new(1,0)
+
+local statusdot = Instance.new('TextLabel')
+statusdot.Text = 'on'; statusdot.Size = UDim2.new(0,50,1,0)
+statusdot.Position = UDim2.new(1,-74,0,0); statusdot.BackgroundTransparency = 1
+statusdot.TextColor3 = Color3.fromRGB(160,160,160); statusdot.Font = Enum.Font.Code
+statusdot.TextSize = 13; statusdot.TextXAlignment = Enum.TextXAlignment.Right; statusdot.Parent = bar
+
+local div0 = Instance.new('Frame')
+div0.Size = UDim2.new(1,0,0,1); div0.Position = UDim2.new(0,0,0,HEADER_H)
+div0.BackgroundColor3 = Color3.fromRGB(30,30,30); div0.BorderSizePixel = 0; div0.Parent = win
+
+local content = Instance.new('Frame')
+content.Size = UDim2.new(1,-PADDING*2,0,CONTENT_H)
+content.Position = UDim2.new(0,PADDING,0,HEADER_H+PADDING)
+content.BackgroundTransparency = 1; content.Parent = win
+local layout = Instance.new('UIListLayout')
+layout.Padding = UDim.new(0,GAP); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.Parent = content
+
+local sliderUpdaters = {}
+local function slider(parent,label,axis,order)
+    local row = Instance.new('Frame')
+    row.Size = UDim2.new(1,0,0,SLIDER_H); row.BackgroundTransparency = 1
+    row.LayoutOrder = order; row.Parent = parent
+    local lbl = Instance.new('TextLabel')
+    lbl.Text=label; lbl.Size=UDim2.new(0.55,0,0,18); lbl.BackgroundTransparency=1
+    lbl.TextColor3=Color3.fromRGB(210,210,210); lbl.Font=Enum.Font.Code; lbl.TextSize=15
+    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=row
+    local val = Instance.new('TextLabel')
+    val.Text='1.0x'; val.Size=UDim2.new(0.45,0,0,18); val.Position=UDim2.new(0.55,0,0,0)
+    val.BackgroundTransparency=1; val.TextColor3=Color3.fromRGB(140,140,140); val.Font=Enum.Font.Code
+    val.TextSize=15; val.TextXAlignment=Enum.TextXAlignment.Right; val.Parent=row
+    local track = Instance.new('Frame')
+    track.Size=UDim2.new(1,0,0,6); track.Position=UDim2.new(0,0,0,26)
+    track.BackgroundColor3=Color3.fromRGB(35,35,35); track.BorderSizePixel=0; track.Parent=row
+    Instance.new('UICorner',track).CornerRadius=UDim.new(1,0)
+    local fill = Instance.new('Frame')
+    fill.Size=UDim2.new(0,0,1,0); fill.BackgroundColor3=Color3.fromRGB(200,200,200)
+    fill.BorderSizePixel=0; fill.Parent=track
+    Instance.new('UICorner',fill).CornerRadius=UDim.new(1,0)
+    local knob = Instance.new('Frame')
+    knob.Size=UDim2.new(0,16,0,16); knob.Position=UDim2.new(0,-8,0.5,-8)
+    knob.BackgroundColor3=Color3.fromRGB(230,230,230); knob.BorderSizePixel=0
+    knob.ZIndex=3; knob.Parent=track
+    Instance.new('UICorner',knob).CornerRadius=UDim.new(1,0)
+    local dragging=false
+    local function set(alpha)
+        alpha=math.clamp(alpha,0,1); local v=1+alpha*9
+        HitboxMult[axis]=v; getgenv().DiveHitboxMult[axis]=v
+        val.Text=string.format('%.1f',v)..'x'
+        fill.Size=UDim2.new(alpha,0,1,0); knob.Position=UDim2.new(alpha,-8,0.5,-8)
+    end
+    sliderUpdaters[axis]=function() set(0) end
+    local function startDrag(x) dragging=true; set((x-track.AbsolutePosition.X)/track.AbsoluteSize.X) end
+    knob.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then startDrag(i.Position.X) end end)
+    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then startDrag(i.Position.X) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end end)
+    RunService.RenderStepped:Connect(function()
+        if not dragging then return end
+        set((UserInputService:GetMouseLocation().X-track.AbsolutePosition.X)/track.AbsoluteSize.X)
+    end)
+    set(0)
+end
+slider(content,'szerokosc (x)','X',1)
+slider(content,'wysokosc  (y)','Y',2)
+slider(content,'glebokosc (z)','Z',3)
+
+local function mkbtn(order)
+    local b=Instance.new('TextButton')
+    b.Size=UDim2.new(1,0,0,BTN_H); b.BackgroundColor3=Color3.fromRGB(20,20,20)
+    b.TextColor3=Color3.fromRGB(160,160,160); b.Font=Enum.Font.Code
+    b.TextSize=15; b.BorderSizePixel=0; b.LayoutOrder=order; b.Parent=content
+    Instance.new('UICorner',b).CornerRadius=UDim.new(0,4)
+    local s=Instance.new('UIStroke',b); s.Color=Color3.fromRGB(40,40,40); s.Thickness=1
+    return b,s
+end
+
+local resetbtn,_=mkbtn(4)
+resetbtn.Text='reset'
+resetbtn.MouseButton1Click:Connect(function()
+    for _,u in pairs(sliderUpdaters) do u() end
+    resetbtn.Text='reset  ok'
+    task.delay(1.2,function() resetbtn.Text='reset' end)
+end)
+resetbtn.MouseEnter:Connect(function() resetbtn.BackgroundColor3=Color3.fromRGB(28,28,28) resetbtn.TextColor3=Color3.fromRGB(200,200,200) end)
+resetbtn.MouseLeave:Connect(function() resetbtn.BackgroundColor3=Color3.fromRGB(20,20,20) resetbtn.TextColor3=Color3.fromRGB(160,160,160) end)
+
+local sdiv=Instance.new('Frame')
+sdiv.Size=UDim2.new(1,0,0,1); sdiv.BackgroundColor3=Color3.fromRGB(30,30,30)
+sdiv.BorderSizePixel=0; sdiv.LayoutOrder=5; sdiv.Parent=content
+
+local spectateOn=false
+local specbtn,specstroke=mkbtn(6)
+specbtn.Text='spectate detect  off'; specbtn.TextColor3=Color3.fromRGB(130,130,130)
+specbtn.MouseEnter:Connect(function() specbtn.BackgroundColor3=Color3.fromRGB(28,28,28) end)
+specbtn.MouseLeave:Connect(function() specbtn.BackgroundColor3=Color3.fromRGB(20,20,20) end)
+
+local agui=Instance.new('ScreenGui')
+agui.Name='aPanel_'..math.random(1e4,9e4); agui.ResetOnSpawn=false
+agui.DisplayOrder=1000; agui.IgnoreGuiInset=true; agui.Parent=game:GetService('CoreGui')
+local apanel=Instance.new('Frame')
+apanel.Size=UDim2.new(0,WIN_W,0,80); apanel.BackgroundColor3=Color3.fromRGB(10,10,10)
+apanel.BorderSizePixel=0; apanel.Visible=false; apanel.Parent=agui
+Instance.new('UICorner',apanel).CornerRadius=UDim.new(0,6)
+Instance.new('UIStroke',apanel).Color=Color3.fromRGB(40,40,40)
+local apbar=Instance.new('Frame')
+apbar.Size=UDim2.new(1,0,0,28); apbar.BackgroundColor3=Color3.fromRGB(15,15,15)
+apbar.BorderSizePixel=0; apbar.Parent=apanel
+Instance.new('UICorner',apbar).CornerRadius=UDim.new(0,6)
+local apbarfix=Instance.new('Frame')
+apbarfix.Size=UDim2.new(1,0,0.5,0); apbarfix.Position=UDim2.new(0,0,0.5,0)
+apbarfix.BackgroundColor3=Color3.fromRGB(15,15,15); apbarfix.BorderSizePixel=0; apbarfix.Parent=apbar
+local apTitle=Instance.new('TextLabel')
+apTitle.Text='Administratorzy'; apTitle.Size=UDim2.new(1,-10,1,0)
+apTitle.Position=UDim2.new(0,10,0,0); apTitle.BackgroundTransparency=1
+apTitle.TextColor3=Color3.fromRGB(220,220,220); apTitle.Font=Enum.Font.Code
+apTitle.TextSize=14; apTitle.TextXAlignment=Enum.TextXAlignment.Left; apTitle.Parent=apbar
+local apDiv=Instance.new('Frame')
+apDiv.Size=UDim2.new(1,0,0,1); apDiv.Position=UDim2.new(0,0,0,28)
+apDiv.BackgroundColor3=Color3.fromRGB(30,30,30); apDiv.BorderSizePixel=0; apDiv.Parent=apanel
+local apcontent=Instance.new('Frame')
+apcontent.Position=UDim2.new(0,12,0,34); apcontent.BackgroundTransparency=1; apcontent.Parent=apanel
+local aplayout=Instance.new('UIListLayout')
+aplayout.Padding=UDim.new(0,5); aplayout.SortOrder=Enum.SortOrder.LayoutOrder; aplayout.Parent=apcontent
+local brakLbl=Instance.new('TextLabel')
+brakLbl.Size=UDim2.new(1,0,0,18); brakLbl.BackgroundTransparency=1
+brakLbl.TextColor3=Color3.fromRGB(70,70,70); brakLbl.Font=Enum.Font.Code
+brakLbl.TextSize=13; brakLbl.TextXAlignment=Enum.TextXAlignment.Left
+brakLbl.Text='brak'; brakLbl.LayoutOrder=0; brakLbl.Visible=true; brakLbl.Parent=apcontent
+local nameLabels={}
+for i=1,20 do
+    local nl=Instance.new('TextLabel')
+    nl.Size=UDim2.new(1,0,0,18); nl.BackgroundTransparency=1
+    nl.TextColor3=Color3.fromRGB(210,210,210); nl.Font=Enum.Font.Code
+    nl.TextSize=14; nl.TextXAlignment=Enum.TextXAlignment.Left
+    nl.Text=''; nl.Visible=false; nl.LayoutOrder=i; nl.Parent=apcontent
+    nameLabels[i]=nl
+end
+local function setNames(names)
+    local n=#names
+    if n==0 then
+        brakLbl.Visible=true
+        for _,nl in ipairs(nameLabels) do nl.Visible=false nl.Text='' end
+    else
+        brakLbl.Visible=false
+        for i,nl in ipairs(nameLabels) do
+            if i<=n then nl.Text='  '..names[i] nl.Visible=true
+            else nl.Visible=false nl.Text='' end
+        end
+    end
+    local rows=math.max(n,1)
+    apanel.Size=UDim2.new(0,WIN_W,0,28+1+8+rows*23+8)
+    apcontent.Size=UDim2.new(1,-24,0,rows*23)
+end
+RunService.RenderStepped:Connect(function()
+    if not apanel.Visible then return end
+    local p=win.AbsolutePosition; local s=win.AbsoluteSize
+    apanel.Position=UDim2.new(0,p.X,0,p.Y+s.Y+6)
+end)
+local function isSpectating(player)
+    if player==Players.LocalPlayer then return false end
+    local char=player.Character
+    if not char then return true end
+    if not char:FindFirstChild('HumanoidRootPart') then return true end
+    for _,part in ipairs(char:GetDescendants()) do
+        if part:IsA('BasePart') and part.Transparency<0.95 then return false end
+    end
+    return true
+end
+local spectateThread=nil
+local function stopLoop()
+    if spectateThread then task.cancel(spectateThread) spectateThread=nil end
+    apanel.Visible=false
+end
+local function startLoop()
+    stopLoop(); apanel.Visible=true; setNames({})
+    spectateThread=task.spawn(function()
+        while spectateOn do
+            local list={}
+            for _,p in ipairs(Players:GetPlayers()) do
+                if isSpectating(p) then table.insert(list,p.Name) end
+            end
+            setNames(list); task.wait(1.5)
+        end
+    end)
+end
+specbtn.MouseButton1Click:Connect(function()
+    spectateOn=not spectateOn
+    if spectateOn then
+        specbtn.Text='spectate detect  on'; specbtn.TextColor3=Color3.fromRGB(80,200,80)
+        specstroke.Color=Color3.fromRGB(40,100,40); startLoop()
+    else
+        specbtn.Text='spectate detect  off'; specbtn.TextColor3=Color3.fromRGB(130,130,130)
+        specstroke.Color=Color3.fromRGB(40,40,40); stopLoop()
+    end
+end)
+task.spawn(function()
+    while task.wait(2) do
+        if hookInstalled then
+            statusdot.Text='on'; statusdot.TextColor3=Color3.fromRGB(160,160,160)
+            bubble.BackgroundColor3=Color3.fromRGB(60,200,80)
+        else
+            statusdot.Text='off'; statusdot.TextColor3=Color3.fromRGB(100,100,100)
+            bubble.BackgroundColor3=Color3.fromRGB(80,80,80); tryHook()
+        end
+    end
+end)
+print('slpn skrypt loaded')
