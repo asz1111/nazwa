@@ -1,0 +1,396 @@
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local LocalPlayer = Players.LocalPlayer
+local parentContainer = gethui and gethui() or CoreGui
+
+-- Destroy existing GUI instance
+if parentContainer:FindFirstChild("SLPN_HitboxGui") then
+    parentContainer.SLPN_HitboxGui:Destroy()
+end
+
+-- Get Hitbox Module & Internal Presets
+local SharedModules = ReplicatedStorage:WaitForChild("SharedModules")
+local HitboxModule = require(SharedModules.Hitbox)
+local ConfigModule = require(SharedModules.Hitbox.Config)
+
+-- Make ConfigModule writeable
+setreadonly(ConfigModule, false)
+for k, v in pairs(ConfigModule) do
+    if type(v) == "table" then
+        setreadonly(v, false)
+    end
+end
+
+-- Extract internal u33 table from HitboxModule.new
+local upvalues = debug.getupvalues(HitboxModule.new)
+local internalPresets = upvalues[2]
+if type(internalPresets) == "table" then
+    setreadonly(internalPresets, false)
+    for k, v in pairs(internalPresets) do
+        if type(v) == "table" then
+            setreadonly(v, false)
+        end
+    end
+end
+
+local CurrentSizes = {
+    Maradona = 10,
+    Header = 10,
+    Pass = 10,
+    Shoot = 10,
+    Soffit = 10,
+    CaptureBall = 10,
+    Elastico = 10,
+    Rainbow = 10,
+    Sombrero = 10
+}
+
+local MAX_SIZE = 10
+
+local function GetPresetTargetSize(pName)
+    local val = 1
+    if pName == "Maradona" then
+        val = math.max(val, CurrentSizes.Maradona or 1)
+    elseif pName == "Head" then
+        val = math.max(val, CurrentSizes.Header or 1)
+    elseif pName == "Default" then
+        val = math.max(val, CurrentSizes.Pass or 1, CurrentSizes.Shoot or 1, CurrentSizes.Elastico or 1, CurrentSizes.Maradona or 1)
+    elseif pName == "Przewrotka" then
+        val = math.max(val, CurrentSizes.Shoot or 1)
+    elseif pName == "InFrontOfLegs" then
+        val = math.max(val, CurrentSizes.Soffit or 1, CurrentSizes.Elastico or 1, CurrentSizes.Sombrero or 1)
+    elseif pName == "BehindLegs" then
+        val = math.max(val, CurrentSizes.Soffit or 1, CurrentSizes.Rainbow or 1)
+    elseif pName == "CaptureBall" then
+        val = math.max(val, CurrentSizes.CaptureBall or 1)
+    end
+    return math.clamp(val, 1, MAX_SIZE)
+end
+
+local function ApplySizes()
+    local allPresets = {"Default", "Head", "Maradona", "Przewrotka", "InFrontOfLegs", "BehindLegs", "CaptureBall", "GK", "LowBlockLeft", "LowBlockRight", "Slide", "TorsoCatch"}
+    for _, pName in ipairs(allPresets) do
+        local sz = GetPresetTargetSize(pName)
+        local targetVec = Vector3.new(sz, sz, sz)
+        if ConfigModule[pName] and type(ConfigModule[pName]) == "table" then
+            setreadonly(ConfigModule[pName], false)
+            ConfigModule[pName].Size = targetVec
+        end
+        if internalPresets and internalPresets[pName] and type(internalPresets[pName]) == "table" then
+            setreadonly(internalPresets[pName], false)
+            internalPresets[pName].Size = targetVec
+        end
+    end
+end
+
+-- Hook HitboxModule.new
+if not getgenv().SLPN_OriginalHitboxNew then
+    getgenv().SLPN_OriginalHitboxNew = HitboxModule.new
+    HitboxModule.new = function(id, presetName, params)
+        local hb = getgenv().SLPN_OriginalHitboxNew(id, presetName, params)
+        if hb then
+            local sz = GetPresetTargetSize(presetName)
+            hb.Size = Vector3.new(sz, sz, sz)
+        end
+        return hb
+    end
+end
+
+-- Hook GetPartsInHitbox
+if not getgenv().SLPN_OriginalGetPartsInHitbox then
+    getgenv().SLPN_OriginalGetPartsInHitbox = HitboxModule.GetPartsInHitbox
+    HitboxModule.GetPartsInHitbox = function(self)
+        if self and self.Size then
+            -- Automatically maintain scaled size
+        end
+        return getgenv().SLPN_OriginalGetPartsInHitbox(self)
+    end
+end
+
+ApplySizes()
+
+-- Create Clean Black Minimalist GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SLPN_HitboxGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = parentContainer
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 360, 0, 560)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -280)
+MainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 14)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(35, 35, 40)
+UIStroke.Thickness = 1
+UIStroke.Parent = MainFrame
+
+-- Title Bar
+local TitleBar = Instance.new("Frame")
+TitleBar.Name = "TitleBar"
+TitleBar.Size = UDim2.new(1, 0, 0, 42)
+TitleBar.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, -50, 1, 0)
+TitleText.Position = UDim2.new(0, 14, 0, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "Skrypt slpn made by asz"
+TitleText.TextColor3 = Color3.fromRGB(240, 240, 245)
+TitleText.TextSize = 14
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
+TitleText.Parent = TitleBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 26, 0, 26)
+CloseBtn.Position = UDim2.new(1, -34, 0, 8)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(180, 180, 190)
+CloseBtn.Font = Enum.Font.GothamMedium
+CloseBtn.TextSize = 12
+CloseBtn.Parent = TitleBar
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseBtn
+
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+-- Dragging
+local dragging, dragInput, dragStart, startPos
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+TitleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Scroll Container
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -20, 1, -115)
+ScrollFrame.Position = UDim2.new(0, 10, 0, 50)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.ScrollBarThickness = 3
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 70)
+ScrollFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ScrollFrame
+
+-- Slider Creator
+local function CreateSlider(displayName, key, defaultVal, layoutOrder)
+    local Container = Instance.new("Frame")
+    Container.Size = UDim2.new(1, 0, 0, 48)
+    Container.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+    Container.LayoutOrder = layoutOrder
+    Container.Parent = ScrollFrame
+
+    local CCorner = Instance.new("UICorner")
+    CCorner.CornerRadius = UDim.new(0, 6)
+    CCorner.Parent = Container
+
+    local CStroke = Instance.new("UIStroke")
+    CStroke.Color = Color3.fromRGB(30, 30, 36)
+    CStroke.Thickness = 1
+    CStroke.Parent = Container
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(1, -70, 0, 20)
+    Label.Position = UDim2.new(0, 12, 0, 5)
+    Label.BackgroundTransparency = 1
+    Label.Text = displayName
+    Label.TextColor3 = Color3.fromRGB(210, 210, 215)
+    Label.TextSize = 13
+    Label.Font = Enum.Font.GothamMedium
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = Container
+
+    local ValueLabel = Instance.new("TextLabel")
+    ValueLabel.Size = UDim2.new(0, 50, 0, 20)
+    ValueLabel.Position = UDim2.new(1, -62, 0, 5)
+    ValueLabel.BackgroundTransparency = 1
+    ValueLabel.Text = string.format("%.1f", defaultVal)
+    ValueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ValueLabel.TextSize = 13
+    ValueLabel.Font = Enum.Font.GothamBold
+    ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    ValueLabel.Parent = Container
+
+    local SliderBar = Instance.new("Frame")
+    SliderBar.Size = UDim2.new(1, -24, 0, 6)
+    SliderBar.Position = UDim2.new(0, 12, 0, 30)
+    SliderBar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+    SliderBar.Parent = Container
+
+    local SCorner = Instance.new("UICorner")
+    SCorner.CornerRadius = UDim.new(0, 3)
+    SCorner.Parent = SliderBar
+
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new((defaultVal - 1) / (MAX_SIZE - 1), 0, 1, 0)
+    Fill.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+    Fill.Parent = SliderBar
+
+    local FCorner = Instance.new("UICorner")
+    FCorner.CornerRadius = UDim.new(0, 3)
+    FCorner.Parent = Fill
+
+    local isSliding = false
+    local function Update(input)
+        local posX = math.clamp(input.Position.X - SliderBar.AbsolutePosition.X, 0, SliderBar.AbsoluteSize.X)
+        local pct = posX / SliderBar.AbsoluteSize.X
+        local val = math.clamp(1 + pct * (MAX_SIZE - 1), 1, MAX_SIZE)
+        val = math.floor(val * 10 + 0.5) / 10
+        Fill.Size = UDim2.new((val - 1) / (MAX_SIZE - 1), 0, 1, 0)
+        ValueLabel.Text = string.format("%.1f", val)
+        CurrentSizes[key] = val
+        ApplySizes()
+    end
+
+    SliderBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isSliding = true
+            Update(input)
+        end
+    end)
+
+    SliderBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isSliding = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isSliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+            Update(input)
+        end
+    end)
+
+    return {
+        SetValue = function(val)
+            val = math.clamp(val, 1, MAX_SIZE)
+            Fill.Size = UDim2.new((val - 1) / (MAX_SIZE - 1), 0, 1, 0)
+            ValueLabel.Text = string.format("%.1f", val)
+            CurrentSizes[key] = val
+        end
+    }
+end
+
+local sliders = {}
+sliders.Maradona = CreateSlider("Maradona", "Maradona", CurrentSizes.Maradona, 1)
+sliders.Header = CreateSlider("Header", "Header", CurrentSizes.Header, 2)
+sliders.Pass = CreateSlider("Pass", "Pass", CurrentSizes.Pass, 3)
+sliders.Shoot = CreateSlider("Shoot", "Shoot", CurrentSizes.Shoot, 4)
+sliders.Soffit = CreateSlider("Scroll", "Soffit", CurrentSizes.Soffit, 5)
+sliders.CaptureBall = CreateSlider("Ctrl", "CaptureBall", CurrentSizes.CaptureBall, 6)
+sliders.Elastico = CreateSlider("Elastico", "Elastico", CurrentSizes.Elastico, 7)
+sliders.Rainbow = CreateSlider("Rainbow", "Rainbow", CurrentSizes.Rainbow, 8)
+sliders.Sombrero = CreateSlider("Sombrero Flick", "Sombrero", CurrentSizes.Sombrero, 9)
+
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 15)
+
+-- Bottom Action Buttons
+local BottomFrame = Instance.new("Frame")
+BottomFrame.Size = UDim2.new(1, -20, 0, 44)
+BottomFrame.Position = UDim2.new(0, 10, 1, -52)
+BottomFrame.BackgroundTransparency = 1
+BottomFrame.Parent = MainFrame
+
+local MaxAllBtn = Instance.new("TextButton")
+MaxAllBtn.Size = UDim2.new(0.48, 0, 1, 0)
+MaxAllBtn.Position = UDim2.new(0, 0, 0, 0)
+MaxAllBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+MaxAllBtn.Text = "Set All to 10"
+MaxAllBtn.TextColor3 = Color3.fromRGB(240, 240, 245)
+MaxAllBtn.Font = Enum.Font.GothamBold
+MaxAllBtn.TextSize = 12
+MaxAllBtn.Parent = BottomFrame
+
+local MaxCorner = Instance.new("UICorner")
+MaxCorner.CornerRadius = UDim.new(0, 6)
+MaxCorner.Parent = MaxAllBtn
+
+local MaxStroke = Instance.new("UIStroke")
+MaxStroke.Color = Color3.fromRGB(50, 50, 60)
+MaxStroke.Thickness = 1
+MaxStroke.Parent = MaxAllBtn
+
+local ResetBtn = Instance.new("TextButton")
+ResetBtn.Size = UDim2.new(0.48, 0, 1, 0)
+ResetBtn.Position = UDim2.new(0.52, 0, 0, 0)
+ResetBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 26)
+ResetBtn.Text = "Reset"
+ResetBtn.TextColor3 = Color3.fromRGB(170, 170, 180)
+ResetBtn.Font = Enum.Font.GothamMedium
+ResetBtn.TextSize = 12
+ResetBtn.Parent = BottomFrame
+
+local ResetCorner = Instance.new("UICorner")
+ResetCorner.CornerRadius = UDim.new(0, 6)
+ResetCorner.Parent = ResetBtn
+
+local ResetStroke = Instance.new("UIStroke")
+ResetStroke.Color = Color3.fromRGB(40, 40, 48)
+ResetStroke.Thickness = 1
+ResetStroke.Parent = ResetBtn
+
+MaxAllBtn.MouseButton1Click:Connect(function()
+    for key, slider in pairs(sliders) do
+        slider.SetValue(10.0)
+    end
+    ApplySizes()
+end)
+
+ResetBtn.MouseButton1Click:Connect(function()
+    sliders.Maradona.SetValue(4.0)
+    sliders.Header.SetValue(3.0)
+    sliders.Pass.SetValue(4.5)
+    sliders.Shoot.SetValue(4.5)
+    sliders.Soffit.SetValue(4.0)
+    sliders.CaptureBall.SetValue(4.5)
+    sliders.Elastico.SetValue(4.0)
+    sliders.Rainbow.SetValue(4.0)
+    sliders.Sombrero.SetValue(4.0)
+    ApplySizes()
+end)
